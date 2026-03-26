@@ -1,0 +1,61 @@
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: action
+name: 'Policy check'
+description: 'Use this action to gate the workflow based on defined policy rules.'
+
+inputs:
+  policy:
+    # TODO: support multiple? support none (implicit)?
+    description: Policy ID to evaluate
+    required: true
+  input-file:
+    description: Input context data for rule evaluation
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - id: evaluate
+      name: Post workflow context to policy service for rule evaluation
+      uses: docker://public.ecr.aws/l7o7z1g8/actions/cb-utils:main-0.1.59
+      run: |
+        jq -cn --arg content "$CONTENT" '{content: $content}' > /tmp/payload.json
+        
+        # Make CloudBees Unify API call
+        response=$(curl --retry 30 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
+          -X 'POST' "$URL/v1/workflows/policy/check" \
+          -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+          --data-binary '@/tmp/payload.json') || command_failed=1
+        
+        # Check curl exit code
+        if [ ${command_failed:-0} -eq 1 ];
+        then
+          echo "CloudBees Unify API call failed with error: $response"
+          exit 1
+        fi
+
+        POLICY_RESULT=$(echo "$response" | jq -r .result)
+        POLICY_ACTION=$(echo "$response" | jq -r .action)
+        POLICY_DETAILS=$(echo "$response" | jq -r .details)
+        printf %s "$POLICY_RESULT" > "$CLOUDBEES_OUTPUTS"/result
+        printf %s "$POLICY_ACTION" > "$CLOUDBEES_OUTPUTS"/action
+        printf %s "$POLICY_DETAILS" > "$CLOUDBEES_OUTPUTS"/details
+      env:
+        POLICY: ${{ inputs.policy }}
+        INPUT: ${{ inputs.input-file }}
+        JWT: ${{ cloudbees.api.token }}
+        URL: ${{ cloudbees.api.url }}
+    - id: enforce
+      name: Enforce policy result
+      uses: docker://alpine:latest
+      shell: sh
+      env:
+        POLICY_ACTION: ${{ steps.evaluate.outputs.action }}
+        POLICY_DETAILS: ${{ steps.evaluate.outputs.details }}
+      run: |
+        if [ "$POLICY_ACTION" = "BLOCKED" ]; then
+          echo "Policy check FAILED — action is BLOCKED"
+          echo "details: $POLICY_DETAILS"
+          exit 1
+        fi
+        echo "Policy check passed"
