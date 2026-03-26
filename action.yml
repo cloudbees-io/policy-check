@@ -19,11 +19,12 @@ runs:
       name: Post workflow context to policy service for rule evaluation
       uses: docker://public.ecr.aws/l7o7z1g8/actions/cb-utils:main-0.1.59
       run: |
-        jq -cn --arg content "$CONTENT" '{content: $content}' > /tmp/payload.json
+        input_content=$(cat "$INPUT")
+        jq -cn --arg content "$input_content" '{content: $content}' > /tmp/payload.json
         
         # Make CloudBees Unify API call
         response=$(curl --retry 30 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
-          -X 'POST' "$URL/v1/workflows/policy/check" \
+          -X 'POST' "$URL/v1/organizations/$ORG/workflows/policy/check" \
           -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
           --data-binary '@/tmp/payload.json') || command_failed=1
         
@@ -43,6 +44,7 @@ runs:
       env:
         POLICY: ${{ inputs.policy }}
         INPUT: ${{ inputs.input-file }}
+        ORG: ${{ cloudbees.org.id }}
         JWT: ${{ cloudbees.api.token }}
         URL: ${{ cloudbees.api.url }}
     - id: enforce
