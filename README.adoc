@@ -1,0 +1,51 @@
+= CloudBees action: Evaluate a policy
+
+Use this action to evaluate a policy. 
+
+== Inputs
+
+[cols="2a,2a,2a,5a",options="header"]
+.Input details
+|===
+
+| Input name
+| Data type
+| Required?
+| Description
+
+| `policy`
+| String
+| Yes
+| Policy identifier. Determines which policy to evaluate.
+
+|`input-data`
+| String
+| Yes
+| JSON data to be passed into the policy evaluation as context.
+
+|===
+
+== Usage example
+
+In the YAML file, all values are required, unless otherwise noted. Default values are included in the example YAML file below. Refer to the notes for options and details.
+
+====
+
+In your YAML file, add:
+
+[source,yaml]
+----
+      - name: Evaluate policy against context
+        uses: cloudbees-io/check-policy@v1
+        id: policycheck
+        with:
+          policy: policy-123
+          input-data: ${{ steps.a-step.outputs.context }}
+----
+
+====
+
+== References
+
+* Learn more about link:https://docs.cloudbees.com/docs/cloudbees-saas-platform-actions/latest/[using actions in CloudBees workflows].
+* Learn about link:https://docs.cloudbees.com/docs/cloudbees-saas-platform/latest/[the CloudBees platform].
