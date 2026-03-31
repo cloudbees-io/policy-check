@@ -43,6 +43,8 @@ In your YAML file, add:
           input-file: /tmp/data.json
 ----
 
+====
+
 == References
 
 * Learn more about link:https://docs.cloudbees.com/docs/cloudbees-saas-platform-actions/latest/[using actions in CloudBees workflows].

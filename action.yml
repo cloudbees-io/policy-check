@@ -20,11 +20,11 @@ runs:
       uses: docker://public.ecr.aws/l7o7z1g8/actions/cb-utils:main-0.1.59
       run: |
         input_content=$(cat "$INPUT")
-        jq -cn --arg content "$input_content" '{content: $content}' > /tmp/payload.json
+        jq -cn --arg content "$input_content" --arg policy "$POLICY" '{polictIdentifier: $policy, input: $content}' > /tmp/payload.json
         
         # Make CloudBees Unify API call
         response=$(curl --retry 30 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
-          -X 'POST' "$URL/v1/organizations/$ORG/workflows/policy/check" \
+          -X 'POST' "$URL/v3/organizations/$ORG/policy/evaluate" \
           -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
           --data-binary '@/tmp/payload.json') || command_failed=1
         
@@ -35,9 +35,9 @@ runs:
           exit 1
         fi
 
-        POLICY_RESULT=$(echo "$response" | jq -r .result)
+        POLICY_RESULT=$(echo "$response" | jq -r .result.allow)
         POLICY_ACTION=$(echo "$response" | jq -r .action)
-        POLICY_DETAILS=$(echo "$response" | jq -r .details)
+        POLICY_DETAILS=$(echo "$response" | jq -r '.result.failures[] | "Check \"" + .checkName + "\" (from rule \"" + .ruleName + "\") in policy \"" + .policy.name + "\" has not passed"')
         printf %s "$POLICY_RESULT" > "$CLOUDBEES_OUTPUTS"/result
         printf %s "$POLICY_ACTION" > "$CLOUDBEES_OUTPUTS"/action
         printf %s "$POLICY_DETAILS" > "$CLOUDBEES_OUTPUTS"/details
@@ -52,12 +52,14 @@ runs:
       uses: docker://alpine:latest
       shell: sh
       env:
+        POLICY_RESULT: ${{ steps.evaluate.outputs.result }}
         POLICY_ACTION: ${{ steps.evaluate.outputs.action }}
         POLICY_DETAILS: ${{ steps.evaluate.outputs.details }}
       run: |
-        if [ "$POLICY_ACTION" = "BLOCKED" ]; then
-          echo "Policy check FAILED — action is BLOCKED"
-          echo "details: $POLICY_DETAILS"
+        if [ "$POLICY_RESULT" != "true" ]; then
+          echo "Policy check FAILED — action is $POLICY_ACTION"
+          echo "details:"
+          echo "$POLICY_DETAILS"
           exit 1
         fi
         echo "Policy check passed"
