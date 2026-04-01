@@ -22,12 +22,19 @@ runs:
     - id: evaluate
       name: Post workflow context to policy service for rule evaluation
       uses: docker://public.ecr.aws/l7o7z1g8/actions/cb-utils:main-0.1.59
+      shell: sh
       run: |
         INPUT="$INPUT_DATA"
         if [ -n "$INPUT_FILE" ]; then
             INPUT=$(cat "$INPUT_FILE")
         fi
         jq -cn --argjson content "$INPUT" --arg policy "$POLICY" '{policyIdentifier: $policy, input: $content}' > /tmp/payload.json
+
+        echo "$POLICY"
+        echo "$INPUT"
+        echo "$URL"
+        echo "$ORG"
+        echo "$JWT"
         
         # Make CloudBees Unify API call
         response=$(curl --retry 30 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
