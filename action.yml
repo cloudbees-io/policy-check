@@ -10,7 +10,11 @@ inputs:
     required: true
   input-data:
     description: Input context data for rule evaluation
-    required: true
+    required: false
+  input-file:
+    description: File containing input context data for rule evaluation
+    required: false
+
 
 runs:
   using: composite
@@ -19,6 +23,10 @@ runs:
       name: Post workflow context to policy service for rule evaluation
       uses: docker://public.ecr.aws/l7o7z1g8/actions/cb-utils:main-0.1.59
       run: |
+        INPUT="$INPUT_DATA"
+        if [ -n "$INPUT_FILE" ]; then
+            INPUT=$(cat "$INPUT_FILE")
+        fi
         jq -cn --argjson content "$INPUT" --arg policy "$POLICY" '{policyIdentifier: $policy, input: $content}' > /tmp/payload.json
         
         # Make CloudBees Unify API call
@@ -42,7 +50,8 @@ runs:
         printf %s "$POLICY_DETAILS" > "$CLOUDBEES_OUTPUTS"/details
       env:
         POLICY: ${{ inputs.policy }}
-        INPUT: ${{ inputs.input-data }}
+        INPUT_DATA: ${{ inputs.input-data }}
+        INPUT_FILE: ${{ inputs.input-file }}
         ORG: ${{ cloudbees.org.id }}
         JWT: ${{ cloudbees.api.token }}
         URL: ${{ cloudbees.api.url }}
