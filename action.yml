@@ -30,7 +30,7 @@ runs:
         jq -cn --argjson content "$INPUT" --arg policy "$POLICY" '{policyIdentifier: $policy, input: $content}' > /tmp/payload.json
         
         # Make CloudBees Unify API call
-        response=$(curl --retry 30 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
+        response=$(curl --retry 3 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
           -X 'POST' "$URL/v3/components/$COMPONENT/policy/evaluate" \
           -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
           --data-binary '@/tmp/payload.json') || command_failed=1
@@ -64,10 +64,13 @@ runs:
         POLICY_ACTION: ${{ steps.evaluate.outputs.action }}
         POLICY_DETAILS: ${{ steps.evaluate.outputs.details }}
       run: |
-        if [ "$POLICY_ACTION" = "BLOCK" ]; then
-          echo "Policy check FAILED — action is $POLICY_ACTION"
-          echo "details:"
+        echo "Policy evaluation result: $POLICY_RESULT"
+        echo "Policy action: $POLICY_ACTION"
+        if [ -n "$POLICY_DETAILS" ]; then
+          echo "Details:"
           echo "$POLICY_DETAILS"
+        fi
+        if [ "$POLICY_ACTION" = "BLOCK" ]; then
           exit 1
         fi
         echo "Policy check passed"
