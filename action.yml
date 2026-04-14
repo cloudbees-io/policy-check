@@ -64,7 +64,7 @@ runs:
         POLICY_ACTION: ${{ steps.evaluate.outputs.action }}
         POLICY_DETAILS: ${{ steps.evaluate.outputs.details }}
       run: |
-        if [ "$POLICY_ACTION" = "BLOCKED" ]; then
+        if [ "$POLICY_ACTION" = "BLOCK" ]; then
           echo "Policy check FAILED — action is $POLICY_ACTION"
           echo "details:"
           echo "$POLICY_DETAILS"
