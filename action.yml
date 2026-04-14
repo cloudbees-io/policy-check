@@ -30,7 +30,7 @@ runs:
         jq -cn --argjson content "$INPUT" --arg policy "$POLICY" '{policyIdentifier: $policy, input: $content}' > /tmp/payload.json
         
         # Make CloudBees Unify API call
-        response=$(curl --retry 30 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
+        response=$(curl --retry 3 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
           -X 'POST' "$URL/v3/components/$COMPONENT/policy/evaluate" \
           -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
           --data-binary '@/tmp/payload.json') || command_failed=1
