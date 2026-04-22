@@ -70,6 +70,9 @@ runs:
           echo "Details:"
           echo "$POLICY_DETAILS"
         fi
+        if [ "$POLICY_ACTION" = "ERROR" ]; then
+          exit 1
+        fi
         if [ "$POLICY_ACTION" = "BLOCK" ]; then
           exit 1
         fi
