@@ -59,7 +59,6 @@ runs:
       name: Publish policy evidence
       uses: cloudbees-io/publish-evidence-item@v1
       with:
-        name: policy-${{ inputs.policy }}
         content: |-
           ## Policy: ${{ inputs.policy }}
 
