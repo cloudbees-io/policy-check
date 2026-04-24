@@ -55,6 +55,23 @@ runs:
         COMPONENT: ${{ cloudbees.component.id }}
         JWT: ${{ cloudbees.api.token }}
         URL: ${{ cloudbees.api.url }}
+    - id: publish-evidence
+      name: Publish policy evidence
+      uses: cloudbees-io/publish-evidence-item@v1
+      with:
+        content: |-
+          ## Policy: ${{ inputs.policy }}
+
+          | Field | Value |
+          |-------|-------|
+          | Action | ${{ steps.evaluate.outputs.action }} |
+          | Result | ${{ steps.evaluate.outputs.result }} |
+
+          ### Details
+
+          ```
+          ${{ steps.evaluate.outputs.details }}
+          ```
     - id: enforce
       name: Enforce policy result
       uses: docker://alpine:latest
