@@ -44,7 +44,16 @@ runs:
 
         POLICY_RESULT=$(echo "$response" | jq -r .result.allow)
         POLICY_ACTION=$(echo "$response" | jq -r .action)
-        POLICY_DETAILS=$(echo "$response" | jq -r '.result.failures[] | "Check \"" + .checkName + "\" (from rule \"" + .ruleName + "\") in policy \"" + .policy.name + "\" has not passed"')
+
+        # Collect OPA check failures
+        FAILURE_DETAILS=$(echo "$response" | jq -r '.result.failures[]? | "Check \"\(.checkName)\" (from rule \"\(.ruleName)\") in policy \"\(.policy.name)\" has not passed"')
+
+        # Collect validation errors
+        ERROR_DETAILS=$(echo "$response" | jq -r '.errors[]? | "[\(.category)] \(.message)"')
+
+        # Combine both into details output
+        POLICY_DETAILS=$(printf '%s\n%s' "$FAILURE_DETAILS" "$ERROR_DETAILS" | sed '/^$/d')
+
         printf %s "$POLICY_RESULT" > "$CLOUDBEES_OUTPUTS"/result
         printf %s "$POLICY_ACTION" > "$CLOUDBEES_OUTPUTS"/action
         printf %s "$POLICY_DETAILS" > "$CLOUDBEES_OUTPUTS"/details
