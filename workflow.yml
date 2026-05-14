@@ -1,7 +1,7 @@
 apiVersion: automation.cloudbees.io/v1alpha1
 kind: workflow
 name: policy-check
-description: Runs the policy check action and handles manual approval stages when required
+#description: Runs the policy check action and handles manual approval stages when required
 
 on:
   workflow_call:
