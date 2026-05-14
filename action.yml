@@ -79,8 +79,6 @@ runs:
         printf %s "$REVIEW_CHANNEL" > "$CLOUDBEES_OUTPUTS"/review-channel
         printf %s "$REVIEW_RECIPIENTS" > "$CLOUDBEES_OUTPUTS"/review-recipients
         printf %s "$REVIEW_TIMEOUT" > "$CLOUDBEES_OUTPUTS"/review-timeout-minutes
-        echo "Raw response:"
-        echo "$response"
       env:
         POLICY: ${{ inputs.policy }}
         INPUT_DATA: ${{ inputs.input-data }}
