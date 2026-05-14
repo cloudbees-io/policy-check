@@ -48,4 +48,4 @@ jobs:
       approvers: ${{ needs.evaluate.outputs.review-recipients }}
       disallowLaunchByUser: "false"
     delegates: cloudbees-io/manual-approval/custom-job.yml@v1
-    timeout-minutes: ${{ needs.evaluate.outputs.review-timeout-minutes }}
+    timeout-minutes: ${{ fromJSON(needs.evaluate.outputs.review-timeout-minutes) }}
