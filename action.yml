@@ -14,7 +14,22 @@ inputs:
   input-file:
     description: File containing input context data for rule evaluation
     required: false
-
+outputs:
+  action:
+    value: ${{ steps.evaluate.outputs.action }}
+    description: "The action to be taken following policy evaluation"
+  details:
+    value: ${{ steps.evaluate.outputs.details }}
+    description: "Details about the results of evaluation"
+  review-channel:
+    value: ${{ steps.evaluate.outputs.review-channel }}
+    description: "The channel type for review (present only when action=REQUEST_APPROVAL)"
+  review-recipients:
+    value: ${{ steps.evaluate.outputs.review-recipients }}
+    description: "The recipients for review (present only when action=REQUEST_APPROVAL)"
+  review-timeout-minutes:
+    value: ${{ steps.evaluate.outputs.review-timeout-minutes }}
+    description: "The timeout for review (present only when action=REQUEST_APPROVAL)"
 
 runs:
   using: composite
@@ -42,7 +57,6 @@ runs:
           exit 1
         fi
 
-        POLICY_RESULT=$(echo "$response" | jq -r .result.allow)
         POLICY_ACTION=$(echo "$response" | jq -r .action)
 
         # Collect OPA check failures
@@ -54,9 +68,17 @@ runs:
         # Combine both into details output
         POLICY_DETAILS=$(printf '%s\n%s' "$FAILURE_DETAILS" "$ERROR_DETAILS" | sed '/^$/d')
 
-        printf %s "$POLICY_RESULT" > "$CLOUDBEES_OUTPUTS"/result
+        # Extract review fields (populated when action = REQUEST_APPROVAL)
+        REVIEW_CHANNEL=$(echo "$response" | jq -r '.review.channel // ""')
+        REVIEW_RECIPIENTS=$(echo "$response" | jq -r '.review.recipients // ""')
+        # Default to 4320 (3 days) when timeoutMinutes is absent or zero
+        REVIEW_TIMEOUT=$(echo "$response" | jq -r 'if (.review.timeoutMinutes // 0) == 0 then 4320 else .review.timeoutMinutes end')
+
         printf %s "$POLICY_ACTION" > "$CLOUDBEES_OUTPUTS"/action
         printf %s "$POLICY_DETAILS" > "$CLOUDBEES_OUTPUTS"/details
+        printf %s "$REVIEW_CHANNEL" > "$CLOUDBEES_OUTPUTS"/review-channel
+        printf %s "$REVIEW_RECIPIENTS" > "$CLOUDBEES_OUTPUTS"/review-recipients
+        printf %s "$REVIEW_TIMEOUT" > "$CLOUDBEES_OUTPUTS"/review-timeout-minutes
       env:
         POLICY: ${{ inputs.policy }}
         INPUT_DATA: ${{ inputs.input-data }}
@@ -74,7 +96,6 @@ runs:
           | Field | Value |
           |-------|-------|
           | Action | ${{ steps.evaluate.outputs.action }} |
-          | Result | ${{ steps.evaluate.outputs.result }} |
 
           ### Details
 
@@ -86,11 +107,9 @@ runs:
       uses: docker://alpine:latest
       shell: sh
       env:
-        POLICY_RESULT: ${{ steps.evaluate.outputs.result }}
         POLICY_ACTION: ${{ steps.evaluate.outputs.action }}
         POLICY_DETAILS: ${{ steps.evaluate.outputs.details }}
       run: |
-        echo "Policy evaluation result: $POLICY_RESULT"
         echo "Policy action: $POLICY_ACTION"
         if [ -n "$POLICY_DETAILS" ]; then
           echo "Details:"
