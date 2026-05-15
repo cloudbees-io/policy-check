@@ -1,6 +1,6 @@
 = CloudBees action: Evaluate a policy
 
-Use this action to evaluate a policy. 
+Use this action to evaluate a policy.
 
 == Inputs
 
@@ -20,8 +20,44 @@ Use this action to evaluate a policy.
 
 |`input-data`
 | String
-| Yes
+| No
 | JSON data to be passed into the policy evaluation as context.
+
+|`input-file`
+| String
+| No
+| Path to a file containing JSON data to be passed into the policy evaluation as context. Takes precedence over `input-data` when both are provided.
+
+|===
+
+== Outputs
+
+[cols="2a,2a,5a",options="header"]
+.Output details
+|===
+
+| Output name
+| Data type
+| Description
+
+| `action`
+| String
+| The action to be taken following policy evaluation.
+Possible values are `CONTINUE`, `REQUEST_APPROVAL`, `BLOCK`, and `ERROR`.
+`BLOCK` and `ERROR` results are enforced internally: the action exits with a non-zero status to halt the workflow.
+The `action` output is available to callers for cases not already handled internally, such as routing `REQUEST_APPROVAL` to a manual approval flow.
+
+| `details`
+| String
+| Details about the results of evaluation, including any check failures or validation errors.
+
+| `review-channel`
+| String
+| The channel type for review. Present only when `action=REQUEST_APPROVAL`.
+
+| `review-recipients`
+| String
+| The recipients for review. Present only when `action=REQUEST_APPROVAL`.
 
 |===
 
