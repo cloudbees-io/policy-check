@@ -1,8 +1,33 @@
-= CloudBees action: Evaluate a policy
+= CloudBees policy check actions
 
-Use this action to evaluate a policy.
+Actions for gating workflows via CloudBees policy evaluation.
 
-== Inputs
+Two actions are available depending on whether you know the policy ID up front or want the platform to discover applicable policies automatically:
+
+[cols="2a,3a,3a",options="header"]
+|===
+| Action | When to use | Caller reference
+
+| <<evaluate-by-id,Evaluate a policy by ID>>
+| You know the specific policy to evaluate.
+| `cloudbees-io/policy-check@v1`
+
+| <<evaluate-by-context,Evaluate policies by context>>
+| You want all policies applicable to the current workflow context discovered and evaluated automatically — no policy IDs needed.
+| `cloudbees-io/policy-check/actions/evaluate-policy-context@v1.2`
+
+|===
+
+Both actions enforce results internally: `BLOCK` and `ERROR` outcomes cause the action to exit with a non-zero status, halting the workflow.
+
+'''
+
+[#evaluate-by-id]
+== Evaluate a policy by ID
+
+Evaluates a single named policy. Use this when you know exactly which policy applies.
+
+=== Inputs
 
 [cols="2a,2a,2a,5a",options="header"]
 .Input details
@@ -30,7 +55,7 @@ Use this action to evaluate a policy.
 
 |===
 
-== Outputs
+=== Outputs
 
 [cols="2a,2a,5a",options="header"]
 .Output details
@@ -61,25 +86,187 @@ The `action` output is available to callers for cases not already handled intern
 
 |===
 
-== Usage example
-
-In the YAML file, all values are required, unless otherwise noted. Default values are included in the example YAML file below. Refer to the notes for options and details.
-
-====
-
-In your YAML file, add:
+=== Usage example
 
 [source,yaml]
 ----
-      - name: Evaluate policy against context
-        uses: cloudbees-io/check-policy@v1
-        id: policycheck
+      - name: Evaluate policy
+        id: policy-check
+        uses: cloudbees-io/policy-check@v1
         with:
-          policy: policy-123
-          input-data: ${{ steps.a-step.outputs.context }}
+          policy: 22f76106-3661-409f-b654-42ab4a052fe4
+          input-data: ${{ steps.scan.outputs.policy-subject }}
 ----
 
-====
+To act on a `REQUEST_APPROVAL` result, read the `action` output from the step:
+
+[source,yaml]
+----
+      - name: Evaluate policy
+        id: policy-check
+        uses: cloudbees-io/policy-check@v1
+        with:
+          policy: 22f76106-3661-409f-b654-42ab4a052fe4
+          input-data: ${{ steps.scan.outputs.policy-subject }}
+
+      - name: Request approval
+        if: ${{ steps.policy-check.outputs.action == 'REQUEST_APPROVAL' }}
+        uses: cloudbees-io/request-approval@v1
+        with:
+          channel: ${{ steps.policy-check.outputs.review-channel }}
+          recipients: ${{ steps.policy-check.outputs.review-recipients }}
+----
+
+'''
+
+[#evaluate-by-context]
+== Evaluate policies by context
+
+Discovers and evaluates all policies applicable to the current workflow context automatically.
+No policy IDs are required — the platform resolves which policies apply based on the component, organization, and workflow run context read from CloudBees platform variables.
+
+Use this action when policies are managed centrally and you want enforcement without coupling the workflow to specific policy identifiers.
+
+=== How it works
+
+The action builds a `workflow_request_context` payload from `cloudbees.*` platform variables and posts it to the `evaluate-by-context` endpoint.
+The platform server-side:
+
+. Looks up the component type and resolves the automation metadata from the run ID.
+. Discovers all policies applicable to the resolved context.
+. Evaluates each policy independently.
+. Reconciles results into a single top-level `action` (most severe wins: `BLOCK` > `REQUEST_APPROVAL` > `CONTINUE`).
+
+If any policy evaluation returns an error, the overall `action` is `ERROR` (fail-closed).
+If no policies are discovered, the action is `CONTINUE`.
+
+=== Inputs
+
+[cols="2a,2a,2a,5a",options="header"]
+.Input details
+|===
+
+| Input name
+| Data type
+| Required?
+| Description
+
+|`input-data`
+| String
+| No
+| JSON data to be merged into the evaluation request as additional input context.
+
+|`input-file`
+| String
+| No
+| Path to a file containing JSON data to be merged into the evaluation request as additional input context. Takes precedence over `input-data` when both are provided.
+
+| `checkpoint-type`
+| String
+| No
+| Checkpoint entity kind: `stage`, `workflow`, or `job`.
+When provided, scopes policy discovery to policies applicable at this checkpoint type.
+
+| `checkpoint-name`
+| String
+| No
+| Checkpoint entity name.
+Omit when `checkpoint-type` is `workflow`.
+
+| `checkpoint-position`
+| String
+| No
+| Position within the checkpoint: `entry`, `exit`, or `within`.
+
+|===
+
+=== Outputs
+
+[cols="2a,2a,5a",options="header"]
+.Output details
+|===
+
+| Output name
+| Data type
+| Description
+
+| `action`
+| String
+| The reconciled action across all evaluated policies.
+Possible values are `CONTINUE`, `REQUEST_APPROVAL`, `BLOCK`, and `ERROR`.
+`BLOCK` and `ERROR` results are enforced internally: the action exits with a non-zero status to halt the workflow.
+
+| `details`
+| String
+| Details about the results of evaluation, including per-policy check failures and errors.
+
+| `review-channel`
+| String
+| The channel type for review. Present only when `action=REQUEST_APPROVAL`.
+
+| `review-recipients`
+| String
+| The aggregated recipients for review across all requesting policies. Present only when `action=REQUEST_APPROVAL`.
+
+|===
+
+=== Usage examples
+
+==== Basic — evaluate all applicable policies
+
+[source,yaml]
+----
+      - name: Evaluate policies by context
+        uses: cloudbees-io/policy-check/actions/evaluate-policy-context@v1.2
+----
+
+==== With checkpoint — scope to a specific stage boundary
+
+[source,yaml]
+----
+      - name: Evaluate policies at stage entry
+        uses: cloudbees-io/policy-check/actions/evaluate-policy-context@v1.2
+        with:
+          checkpoint-type: stage
+          checkpoint-name: deploy-to-staging
+          checkpoint-position: entry
+----
+
+==== With additional input data
+
+[source,yaml]
+----
+      - name: Evaluate policies with scan results
+        id: policy-context-check
+        uses: cloudbees-io/policy-check/actions/evaluate-policy-context@v1.2
+        with:
+          checkpoint-type: stage
+          checkpoint-name: deploy-to-staging
+          checkpoint-position: entry
+          input-data: ${{ steps.scan.outputs.policy-subject }}
+----
+
+==== Routing a `REQUEST_APPROVAL` outcome
+
+[source,yaml]
+----
+      - name: Evaluate policies by context
+        id: policy-context-check
+        uses: cloudbees-io/policy-check/actions/evaluate-policy-context@v1.2
+        with:
+          checkpoint-type: stage
+          checkpoint-name: deploy-to-staging
+          checkpoint-position: entry
+
+      - name: Request approval
+        if: ${{ steps.policy-context-check.outputs.action == 'REQUEST_APPROVAL' }}
+        uses: cloudbees-io/request-approval@v1
+        with:
+          channel: ${{ steps.policy-context-check.outputs.review-channel }}
+          recipients: ${{ steps.policy-context-check.outputs.review-recipients }}
+----
+
+'''
 
 == References
 
