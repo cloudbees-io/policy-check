@@ -90,7 +90,7 @@ runs:
         FAILURE_DETAILS=$(echo "$response" | jq -r '
           .results[]? | . as $r |
           .result.failures[]? |
-          "Policy \"\($r.policy_name)\" - check \"\(.checkName)\" (rule \"\(.ruleName)\") has not passed"')
+          "Policy \"\($r.policyName)\" - check \"\(.checkName)\" (rule \"\(.ruleName)\") has not passed"')
 
         # Top-level errors
         ERROR_DETAILS=$(echo "$response" | jq -r '.errors[]? | "[\(.category)] \(.message)"')
@@ -99,7 +99,7 @@ runs:
         PER_POLICY_ERRORS=$(echo "$response" | jq -r '
           .results[]? | . as $r |
           .errors[]? |
-          "Policy \"\($r.policy_name)\": [\(.category)] \(.message)"')
+          "Policy \"\($r.policyName)\": [\(.category)] \(.message)"')
 
         POLICY_DETAILS=$(printf '%s\n%s\n%s' "$FAILURE_DETAILS" "$ERROR_DETAILS" "$PER_POLICY_ERRORS" | sed '/^$/d')
 
@@ -115,7 +115,7 @@ runs:
             "| _(none discovered)_ | — | — |"
           else
             .results[]? |
-            "| \(.policy_name) | \(.action) | \(.result.failures | length) failure(s) |"
+            "| \(.policyName) | \(.action) | \(.result.failures | length) failure(s) |"
           end')
 
         printf %s "$POLICY_ACTION"    > "$CLOUDBEES_OUTPUTS"/action
