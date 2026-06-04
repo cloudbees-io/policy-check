@@ -60,10 +60,13 @@ runs:
         POLICY_ACTION=$(echo "$response" | jq -r .action)
 
         # Collect OPA check failures
-        FAILURE_DETAILS=$(echo "$response" | jq -r '.result.failures[]? | "Check \"\(.checkName)\" (from rule \"\(.ruleName)\") in policy \"\(.policy.name)\" has not passed"')
+        FAILURE_DETAILS=$(echo "$response" | jq -r '
+          .results[]? | . as $r |
+          .result.failures[]? |
+          "Check \"\(.checkName)\" (from rule \"\(.ruleName)\") in policy \"\($r.policyName)\" has not passed"')
 
         # Collect validation errors
-        ERROR_DETAILS=$(echo "$response" | jq -r '.errors[]? | "[\(.category)] \(.message)"')
+        ERROR_DETAILS=$(echo "$response" | jq -r '.results[]?.errors[]? | "[\(.category)] \(.message)"')
 
         # Combine both into details output
         POLICY_DETAILS=$(printf '%s\n%s' "$FAILURE_DETAILS" "$ERROR_DETAILS" | sed '/^$/d')
