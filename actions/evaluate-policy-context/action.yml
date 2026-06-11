@@ -73,14 +73,27 @@ runs:
             mv /tmp/payload_final.json /tmp/payload.json
         fi
 
-        # Make CloudBees Unify API call
-        response=$(curl --retry 3 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
-          -X 'POST' "$URL/v3/components/$COMPONENT/policy/evaluate-by-context" \
-          -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
-          --data-binary '@/tmp/payload.json') || command_failed=1
+        # Make CloudBees Unify API call (shell retry to avoid concatenated bodies from --retry)
+        MAX_RETRIES=5
+        RETRY_DELAY=30
+        attempt=0
+        curl_exit=0
+        while [ $attempt -le $MAX_RETRIES ]; do
+          curl_exit=0
+          response=$(curl --silent --show-error --fail-with-body \
+            -X 'POST' "$URL/v3/components/$COMPONENT/policy/evaluate-by-context" \
+            -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+            --data-binary '@/tmp/payload.json') || curl_exit=$?
+          [ $curl_exit -eq 0 ] && break
+          attempt=$((attempt + 1))
+          if [ $attempt -le $MAX_RETRIES ]; then
+            echo "CloudBees Unify API call failed (attempt $attempt/$((MAX_RETRIES + 1))), retrying in ${RETRY_DELAY}s..."
+            sleep $RETRY_DELAY
+          fi
+        done
 
-        if [ ${command_failed:-0} -eq 1 ]; then
-          echo "CloudBees Unify API call failed with error: $response"
+        if [ $curl_exit -ne 0 ]; then
+          echo "CloudBees Unify API call failed: $response"
           exit 1
         fi
 
