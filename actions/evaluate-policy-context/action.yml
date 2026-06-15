@@ -63,7 +63,7 @@ runs:
             workflow_request_context: {
               component: { id: $comp_id, org_id: $org_id },
               workflow: (({ run_id: $run_id } + (if $cp_type != "" then { checkpoint: (({type: $cp_type} + (if $cp_name != "" then {name: $cp_name} else {} end)) + (if $cp_pos != "" then {position: $cp_pos} else {} end)) } else {} end))),
-              artifact: { build: { commit_sha: $sha, branch: $branch, repository: $repo } }
+              artifact: { build: { commit_sha: $sha, ref: $branch, repository: $repo } }
             }
           }' > /tmp/payload.json
 
