@@ -124,17 +124,22 @@ runs:
 
         # Build per-policy evidence sections
         POLICY_SECTIONS=$(echo "$response" | jq -r '
-          .results[]? | . as $r |
-          [
-            "### Policy: \($r.policyName)\n",
-            "| Field | Value |",
-            "|-------|-------|",
-            "| ID | \($r.policyId) |",
-            "",
-            if ($r.result.failures | length) > 0 then
-              "**Failed rules:**\n" + ($r.result.failures | map("- \(.ruleName)") | join("\n"))
-            else empty end
-          ] | join("\n")')
+          if (.results | length) == 0 then
+            "_No policies were discovered for this context._"
+          else
+            [ .results[] | . as $r |
+              [
+                "### Policy: \($r.policyName)",
+                "| Field | Value |",
+                "|-------|-------|",
+                "| ID | \($r.policyId) |",
+                "",
+                if ($r.result.failures | length) > 0 then
+                  "**Failed rules:**\n" + ($r.result.failures | map("- \(.ruleName)") | join("\n"))
+                else empty end
+              ] | join("\n")
+            ] | join("\n\n")
+          end')
 
         printf %s "$POLICY_ACTION"    > "$CLOUDBEES_OUTPUTS"/action
         printf %s "$POLICY_DETAILS"   > "$CLOUDBEES_OUTPUTS"/details
@@ -168,7 +173,7 @@ runs:
           | Evaluation | by-context |
           | Checkpoint type | ${{ inputs.checkpoint-type }} |
           | Checkpoint position | ${{ inputs.checkpoint-position }} |
-          ${{ inputs.checkpoint-name != '' && format('| Stage name | {0} |', inputs.checkpoint-name) || '' }}
+          | Stage name | ${{ inputs.checkpoint-name != '' && inputs.checkpoint-name || '-' }} |
           | Action | ${{ steps.evaluate.outputs.action }} |
 
           ${{ steps.evaluate.outputs.policy-sections }}
