@@ -59,11 +59,11 @@ runs:
 
         POLICY_ACTION=$(echo "$response" | jq -r .action)
 
-        # Collect OPA check failures
+        # Per-rule failure lines: Policy "<name>" (<id>): rule "<rule>" failed
         FAILURE_DETAILS=$(echo "$response" | jq -r '
           .results[]? | . as $r |
           .result.failures[]? |
-          "Check \"\(.checkName)\" (from rule \"\(.ruleName)\") in policy \"\($r.policyName)\" has not passed"')
+          "Policy \"\($r.policyName)\" (\($r.policyId)): rule \"\(.ruleName)\" failed"')
 
         # Collect validation errors
         ERROR_DETAILS=$(echo "$response" | jq -r '.results[]?.errors[]? | "[\(.category)] \(.message)"')
@@ -71,17 +71,32 @@ runs:
         # Combine both into details output
         POLICY_DETAILS=$(printf '%s\n%s' "$FAILURE_DETAILS" "$ERROR_DETAILS" | sed '/^$/d')
 
+        # Build per-policy evidence sections
+        POLICY_SECTIONS=$(echo "$response" | jq -r '
+          .results[]? | . as $r |
+          [
+            "### Policy: \($r.policyName)\n",
+            "| Field | Value |",
+            "|-------|-------|",
+            "| ID | \($r.policyId) |",
+            "",
+            if ($r.result.failures | length) > 0 then
+              "**Failed rules:**\n" + ($r.result.failures | map("- \(.ruleName)") | join("\n"))
+            else empty end
+          ] | join("\n")')
+
         # Extract review fields (populated when action = REQUEST_APPROVAL)
         REVIEW_CHANNEL=$(echo "$response" | jq -r '.review.channel // ""')
         REVIEW_RECIPIENTS=$(echo "$response" | jq -r '.review.recipients // ""')
         # Default to 4320 (3 days) when timeoutMinutes is absent or zero
         REVIEW_TIMEOUT=$(echo "$response" | jq -r 'if (.review.timeoutMinutes // 0) == 0 then 4320 else .review.timeoutMinutes end')
 
-        printf %s "$POLICY_ACTION" > "$CLOUDBEES_OUTPUTS"/action
-        printf %s "$POLICY_DETAILS" > "$CLOUDBEES_OUTPUTS"/details
-        printf %s "$REVIEW_CHANNEL" > "$CLOUDBEES_OUTPUTS"/review-channel
+        printf %s "$POLICY_ACTION"    > "$CLOUDBEES_OUTPUTS"/action
+        printf %s "$POLICY_DETAILS"   > "$CLOUDBEES_OUTPUTS"/details
+        printf %s "$REVIEW_CHANNEL"   > "$CLOUDBEES_OUTPUTS"/review-channel
         printf %s "$REVIEW_RECIPIENTS" > "$CLOUDBEES_OUTPUTS"/review-recipients
-        printf %s "$REVIEW_TIMEOUT" > "$CLOUDBEES_OUTPUTS"/review-timeout-minutes
+        printf %s "$REVIEW_TIMEOUT"   > "$CLOUDBEES_OUTPUTS"/review-timeout-minutes
+        printf %s "$POLICY_SECTIONS"  > "$CLOUDBEES_OUTPUTS"/policy-sections
       env:
         POLICY: ${{ inputs.policy }}
         INPUT_DATA: ${{ inputs.input-data }}
@@ -94,17 +109,14 @@ runs:
       uses: cloudbees-io/publish-evidence-item@v1
       with:
         content: |-
-          ## Policy: ${{ inputs.policy }}
+          ## Gate
 
           | Field | Value |
           |-------|-------|
+          | Evaluation | by-id |
           | Action | ${{ steps.evaluate.outputs.action }} |
 
-          ### Details
-
-          ```
-          ${{ steps.evaluate.outputs.details }}
-          ```
+          ${{ steps.evaluate.outputs.policy-sections }}
     - id: enforce
       name: Enforce policy result
       uses: docker://alpine:latest
@@ -113,15 +125,22 @@ runs:
         POLICY_ACTION: ${{ steps.evaluate.outputs.action }}
         POLICY_DETAILS: ${{ steps.evaluate.outputs.details }}
       run: |
-        echo "Policy action: $POLICY_ACTION"
         if [ -n "$POLICY_DETAILS" ]; then
-          echo "Details:"
           echo "$POLICY_DETAILS"
         fi
-        if [ "$POLICY_ACTION" = "ERROR" ]; then
-          exit 1
-        fi
-        if [ "$POLICY_ACTION" = "BLOCK" ]; then
-          exit 1
-        fi
-        echo "Policy check passed"
+        case "$POLICY_ACTION" in
+          BLOCK)
+            echo "Gate action: BLOCK"
+            exit 1
+            ;;
+          REVIEW)
+            echo "Gate action: REVIEW — awaiting manual approval"
+            ;;
+          WARN)
+            echo "Gate action: WARN"
+            ;;
+          ERROR)
+            echo "Gate action: ERROR"
+            exit 1
+            ;;
+        esac
