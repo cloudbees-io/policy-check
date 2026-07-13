@@ -137,10 +137,17 @@ runs:
             echo "Gate action: REVIEW — awaiting manual approval"
             ;;
           WARN)
-            echo "Gate action: WARN"
+            echo "Gate action: WARN — policy passed with warnings, pipeline continues"
             ;;
           ERROR)
             echo "Gate action: ERROR"
+            exit 1
+            ;;
+          CONTINUE)
+            echo "Gate action: CONTINUE — all policies passed"
+            ;;
+          *)
+            echo "Gate action: unknown or empty action \"$POLICY_ACTION\" — failing closed"
             exit 1
             ;;
         esac
