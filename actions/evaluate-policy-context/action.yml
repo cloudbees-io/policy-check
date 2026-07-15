@@ -99,11 +99,11 @@ runs:
 
         POLICY_ACTION=$(echo "$response" | jq -r .action)
 
-        # Per-policy check failures
+        # Per-rule failure lines: Policy "<name>" (<id>): rule "<rule>" failed
         FAILURE_DETAILS=$(echo "$response" | jq -r '
           .results[]? | . as $r |
           .result.failures[]? |
-          "Policy \"\($r.policyName)\" - check \"\(.checkName)\" (rule \"\(.ruleName)\") has not passed"')
+          "Policy \"\($r.policyName)\" (\($r.policyId)): rule \"\(.ruleName)\" failed"')
 
         # Top-level errors
         ERROR_DETAILS=$(echo "$response" | jq -r '.errors[]? | "[\(.category)] \(.message)"')
@@ -122,13 +122,23 @@ runs:
         # Default to 4320 (3 days) when timeoutMinutes is absent or zero
         REVIEW_TIMEOUT=$(echo "$response" | jq -r 'if (.review.timeoutMinutes // 0) == 0 then 4320 else .review.timeoutMinutes end')
 
-        # Build per-policy evidence table rows
-        EVIDENCE_ROWS=$(echo "$response" | jq -r '
+        # Build per-policy evidence sections
+        POLICY_SECTIONS=$(echo "$response" | jq -r '
           if (.results | length) == 0 then
-            "| _(none discovered)_ | — | — |"
+            "_No policies were discovered for this context._"
           else
-            .results[]? |
-            "| \(.policyName) | \(.action) | \(.result.failures | length) failure(s) |"
+            [ .results[] | . as $r |
+              [
+                "### Policy: \($r.policyName)",
+                "| Field | Value |",
+                "|-------|-------|",
+                "| ID | \($r.policyId) |",
+                "",
+                if ($r.result.failures | length) > 0 then
+                  "**Failed rules:**\n" + ($r.result.failures | map("- \(.ruleName)") | join("\n"))
+                else empty end
+              ] | join("\n")
+            ] | join("\n\n")
           end')
 
         printf %s "$POLICY_ACTION"    > "$CLOUDBEES_OUTPUTS"/action
@@ -136,7 +146,7 @@ runs:
         printf %s "$REVIEW_CHANNEL"   > "$CLOUDBEES_OUTPUTS"/review-channel
         printf %s "$REVIEW_RECIPIENTS" > "$CLOUDBEES_OUTPUTS"/review-recipients
         printf %s "$REVIEW_TIMEOUT"   > "$CLOUDBEES_OUTPUTS"/review-timeout-minutes
-        printf %s "$EVIDENCE_ROWS"    > "$CLOUDBEES_OUTPUTS"/evidence-rows
+        printf %s "$POLICY_SECTIONS"  > "$CLOUDBEES_OUTPUTS"/policy-sections
       env:
         COMPONENT:           ${{ cloudbees.component.id }}
         ORG_ID:              ${{ cloudbees.org.id }}
@@ -156,17 +166,17 @@ runs:
       uses: cloudbees-io/publish-evidence-item@v1
       with:
         content: |-
-          ## Policy Context Evaluation
+          ## Gate
 
-          | Policy | Action | Failures |
-          |--------|--------|----------|
-          ${{ steps.evaluate.outputs.evidence-rows }}
+          | Field | Value |
+          |-------|-------|
+          | Evaluation | by-context |
+          | Checkpoint type | ${{ inputs.checkpoint-type }} |
+          | Checkpoint position | ${{ inputs.checkpoint-position }} |
+          | Stage name | ${{ inputs.checkpoint-name != '' && inputs.checkpoint-name || '-' }} |
+          | Action | ${{ steps.evaluate.outputs.action }} |
 
-          ### Details
-
-          ```
-          ${{ steps.evaluate.outputs.details }}
-          ```
+          ${{ steps.evaluate.outputs.policy-sections }}
     - id: enforce
       name: Enforce policy result
       uses: docker://alpine:latest
@@ -175,15 +185,29 @@ runs:
         POLICY_ACTION: ${{ steps.evaluate.outputs.action }}
         POLICY_DETAILS: ${{ steps.evaluate.outputs.details }}
       run: |
-        echo "Policy action: $POLICY_ACTION"
         if [ -n "$POLICY_DETAILS" ]; then
-          echo "Details:"
           echo "$POLICY_DETAILS"
         fi
-        if [ "$POLICY_ACTION" = "ERROR" ]; then
-          exit 1
-        fi
-        if [ "$POLICY_ACTION" = "BLOCK" ]; then
-          exit 1
-        fi
-        echo "Policy check passed"
+        case "$POLICY_ACTION" in
+          BLOCK)
+            echo "Gate action: BLOCK"
+            exit 1
+            ;;
+          REVIEW)
+            echo "Gate action: REVIEW — awaiting manual approval"
+            ;;
+          WARN)
+            echo "Gate action: WARN — policy passed with warnings, pipeline continues"
+            ;;
+          ERROR)
+            echo "Gate action: ERROR"
+            exit 1
+            ;;
+          CONTINUE)
+            echo "Gate action: CONTINUE — all policies passed"
+            ;;
+          *)
+            echo "Gate action: unknown or empty action \"$POLICY_ACTION\" — failing closed"
+            exit 1
+            ;;
+        esac
