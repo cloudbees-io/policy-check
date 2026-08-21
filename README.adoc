@@ -2,120 +2,10 @@
 
 Actions for gating workflows via CloudBees policy evaluation.
 
-Two actions are available depending on whether you know the policy ID up front or want the platform to discover applicable policies automatically:
+One action is available: <<evaluate-by-context,Evaluate policies by context>>, referenced as `cloudbees-io/policy-check/actions/evaluate-policy-context@v1`.
+Use it to have all policies applicable to the current workflow context discovered and evaluated automatically — no policy IDs needed.
 
-[cols="2a,3a,3a",options="header"]
-|===
-| Action | When to use | Caller reference
-
-| <<evaluate-by-id,Evaluate a policy by ID>>
-| You know the specific policy to evaluate.
-| `cloudbees-io/policy-check@v1`
-
-| <<evaluate-by-context,Evaluate policies by context>>
-| You want all policies applicable to the current workflow context discovered and evaluated automatically — no policy IDs needed.
-| `cloudbees-io/policy-check/actions/evaluate-policy-context@v1.2`
-
-|===
-
-Both actions enforce results internally: `BLOCK` and `ERROR` outcomes cause the action to exit with a non-zero status, halting the workflow.
-
-'''
-
-[#evaluate-by-id]
-== Evaluate a policy by ID
-
-Evaluates a single named policy. Use this when you know exactly which policy applies.
-
-=== Inputs
-
-[cols="2a,2a,2a,5a",options="header"]
-.Input details
-|===
-
-| Input name
-| Data type
-| Required?
-| Description
-
-| `policy`
-| String
-| Yes
-| Policy identifier. Determines which policy to evaluate.
-
-|`input-data`
-| String
-| No
-| JSON data to be passed into the policy evaluation as context.
-
-|`input-file`
-| String
-| No
-| Path to a file containing JSON data to be passed into the policy evaluation as context. Takes precedence over `input-data` when both are provided.
-
-|===
-
-=== Outputs
-
-[cols="2a,2a,5a",options="header"]
-.Output details
-|===
-
-| Output name
-| Data type
-| Description
-
-| `action`
-| String
-| The action to be taken following policy evaluation.
-Possible values are `CONTINUE`, `REQUEST_APPROVAL`, `BLOCK`, and `ERROR`.
-`BLOCK` and `ERROR` results are enforced internally: the action exits with a non-zero status to halt the workflow.
-The `action` output is available to callers for cases not already handled internally, such as routing `REQUEST_APPROVAL` to a manual approval flow.
-
-| `details`
-| String
-| Details about the results of evaluation, including any check failures or validation errors.
-
-| `review-channel`
-| String
-| The channel type for review. Present only when `action=REQUEST_APPROVAL`.
-
-| `review-recipients`
-| String
-| The recipients for review. Present only when `action=REQUEST_APPROVAL`.
-
-|===
-
-=== Usage example
-
-[source,yaml]
-----
-      - name: Evaluate policy
-        id: policy-check
-        uses: cloudbees-io/policy-check@v1
-        with:
-          policy: 22f76106-3661-409f-b654-42ab4a052fe4
-          input-data: ${{ steps.scan.outputs.policy-subject }}
-----
-
-To act on a `REQUEST_APPROVAL` result, read the `action` output from the step:
-
-[source,yaml]
-----
-      - name: Evaluate policy
-        id: policy-check
-        uses: cloudbees-io/policy-check@v1
-        with:
-          policy: 22f76106-3661-409f-b654-42ab4a052fe4
-          input-data: ${{ steps.scan.outputs.policy-subject }}
-
-      - name: Request approval
-        if: ${{ steps.policy-check.outputs.action == 'REQUEST_APPROVAL' }}
-        uses: cloudbees-io/request-approval@v1
-        with:
-          channel: ${{ steps.policy-check.outputs.review-channel }}
-          recipients: ${{ steps.policy-check.outputs.review-recipients }}
-----
+The action enforces results internally: `BLOCK` and `ERROR` outcomes cause the action to exit with a non-zero status, halting the workflow.
 
 '''
 
@@ -217,7 +107,7 @@ Possible values are `CONTINUE`, `REQUEST_APPROVAL`, `BLOCK`, and `ERROR`.
 [source,yaml]
 ----
       - name: Evaluate policies by context
-        uses: cloudbees-io/policy-check/actions/evaluate-policy-context@v1.2
+        uses: cloudbees-io/policy-check/actions/evaluate-policy-context@v1
 ----
 
 ==== With checkpoint — scope to a specific stage boundary
@@ -225,7 +115,7 @@ Possible values are `CONTINUE`, `REQUEST_APPROVAL`, `BLOCK`, and `ERROR`.
 [source,yaml]
 ----
       - name: Evaluate policies at stage entry
-        uses: cloudbees-io/policy-check/actions/evaluate-policy-context@v1.2
+        uses: cloudbees-io/policy-check/actions/evaluate-policy-context@v1
         with:
           checkpoint-type: stage
           checkpoint-name: deploy-to-staging
@@ -238,7 +128,7 @@ Possible values are `CONTINUE`, `REQUEST_APPROVAL`, `BLOCK`, and `ERROR`.
 ----
       - name: Evaluate policies with scan results
         id: policy-context-check
-        uses: cloudbees-io/policy-check/actions/evaluate-policy-context@v1.2
+        uses: cloudbees-io/policy-check/actions/evaluate-policy-context@v1
         with:
           checkpoint-type: stage
           checkpoint-name: deploy-to-staging
@@ -252,7 +142,7 @@ Possible values are `CONTINUE`, `REQUEST_APPROVAL`, `BLOCK`, and `ERROR`.
 ----
       - name: Evaluate policies by context
         id: policy-context-check
-        uses: cloudbees-io/policy-check/actions/evaluate-policy-context@v1.2
+        uses: cloudbees-io/policy-check/actions/evaluate-policy-context@v1
         with:
           checkpoint-type: stage
           checkpoint-name: deploy-to-staging
